@@ -57,7 +57,7 @@ resources: {}
 autoscaling:
   enabled: false
   minReplicas: 1
-  maxReplicas: 100
+  maxReplicas: 1
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
 
@@ -70,6 +70,7 @@ affinity: {}
 kafka:
   topic_name: atm_txns
   bootstrap_server: kafka:9092
+  #provide secret name which contains a file to be used for producer config
   # config: 
   #   secretName: 
   #   fileName: 
