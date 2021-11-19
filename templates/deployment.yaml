@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "gess-datagen.fullname" . }}
+  labels:
+    {{- include "gess-datagen.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "gess-datagen.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "gess-datagen.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "gess-datagen.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: gess
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        - name: gess-to-kafka
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: confluentinc/cp-server:7.0.0
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+          - name: TOPIC_NAME
+            value: "{{ .Values.kafka.topic_name }}"
+          - name: KAFKA_BOOTSTRAP_SERVER
+            value: "{{ .Values.kafka.bootstrap_server }}"
+          - name: KAFKA_CONFIG
+            value: "/mnt/config/{{ .Values.kafka.config.fileName }}"
+          command: ["/bin/sh"]
+          {{if .Values.kafka.config.fileName }}
+          args: ["-c", "nc -v -u -l -p 6900 | kafka-console-producer --topic $TOPIC_NAME --bootstrap-server $KAFKA_BOOTSTRAP_SERVER --producer.config $KAFKA_CONFIG"]
+          {{else}}
+          args: ["-c", "nc -v -u -l -p 6900 | kafka-console-producer --topic $TOPIC_NAME --bootstrap-server $KAFKA_BOOTSTRAP_SERVER]
+          {{end}}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: secret-volume
+              mountPath: "/mnt/config"
+              readOnly: true
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: secret-volume
+          secret:
+            secretName: "{{ .Values.kafka.config.secretName }}"
